@@ -1,0 +1,169 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+version: '3'
+services:
+  docker-fe-01:
+    image: "apache-doris:1.2.4.1-fe"
+    container_name: "doris-fe-01"
+    hostname: "fe-01"
+    environment:
+      - FE_SERVERS=fe1:10.244.1.2:9010
+      - FE_ID=1
+    ports:
+      - 8231:8030
+      - 9231:9030
+    volumes:
+      - ./fe-01/doris-meta:/opt/apache-doris/fe/doris-meta
+      - ./fe-01/conf:/opt/apache-doris/fe/conf
+      - ./fe-01/log:/opt/apache-doris/fe/log
+    networks:
+      doris-net:
+        ipv4_address: 10.244.1.2
+  docker-be-01:
+    image: "apache-doris:1.2.4.1-be"
+    container_name: "doris-be-01"
+    hostname: "be-01"
+    depends_on:
+      - docker-fe-01
+    environment:
+      - FE_SERVERS=fe1:10.244.1.2:9010
+      - BE_ADDR=10.244.1.5:9050
+    ports:
+      - 8241:8040
+    volumes:
+      - ./be-01/storage:/opt/apache-doris/be/storage
+      - ./be-01/conf:/opt/apache-doris/be/conf
+      - ./be-01/script:/docker-entrypoint-initdb.d
+      - ./be-01/log:/opt/apache-doris/be/log
+    networks:
+      doris-net:
+        ipv4_address: 10.244.1.5
+  docker-be-02:
+    image: "apache-doris:1.2.4.1-be"
+    container_name: "doris-be-02"
+    hostname: "be-02"
+    depends_on:
+      - docker-fe-01
+    environment:
+      - FE_SERVERS=fe1:10.244.1.2:9010
+      - BE_ADDR=10.244.1.6:9050
+    ports:
+      - 8242:8040
+    volumes:
+      - ./be-02/storage:/opt/apache-doris/be/storage
+      - ./be-02/conf:/opt/apache-doris/be/conf
+      - ./be-02/script:/docker-entrypoint-initdb.d
+      - ./be-02/log:/opt/apache-doris/be/log
+    networks:
+      doris-net:
+        ipv4_address: 10.244.1.6
+  docker-be-03:
+    image: "apache-doris:1.2.4.1-be"
+    container_name: "doris-be-03"
+    hostname: "be-03"
+    depends_on:
+      - docker-fe-01
+    environment:
+      - FE_SERVERS=fe1:10.244.1.2:9010
+      - BE_ADDR=10.244.1.7:9050
+    ports:
+      - 8243:8040
+    volumes:
+      - ./be-03/storage:/opt/apache-doris/be/storage
+      - ./be-03/conf:/opt/apache-doris/be/conf
+      - ./be-03/script:/docker-entrypoint-initdb.d
+      - ./be-03/log:/opt/apache-doris/be/log
+    networks:
+      doris-net:
+        ipv4_address: 10.244.1.7
+
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop2.7.4-java8
+    hostname: "namenode"
+    volumes:
+      - namenode:/hadoop/dfs/name
+    environment:
+      - CLUSTER_NAME=test
+    env_file:
+      - ./hadoop-hive.env
+    ports:
+      - "20070:50070"
+      - "28020:8020"
+    networks:
+      doris-net:
+        ipv4_address: 10.244.1.8
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop2.7.4-java8
+    hostname: "datanode"
+    volumes:
+      - datanode:/hadoop/dfs/data
+    env_file:
+      - ./hadoop-hive.env
+    environment:
+      SERVICE_PRECONDITION: "namenode:50070"
+    ports:
+      - "20075:50075"
+    networks:
+      doris-net:
+        ipv4_address: 10.244.1.9
+
+  hive-server:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    hostname: "hive-server"
+    env_file:
+      - ./hadoop-hive.env
+    environment:
+      HIVE_CORE_CONF_javax_jdo_option_ConnectionURL: "jdbc:postgresql://hive-metastore/metastore"
+      SERVICE_PRECONDITION: "hive-metastore:9083"
+    ports:
+      - "20000:10000"
+    networks:
+      doris-net:
+        ipv4_address: 10.244.1.10
+
+  hive-metastore:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    hostname: "hive-metastore"
+    env_file:
+      - ./hadoop-hive.env
+    command: /opt/hive/bin/hive --service metastore
+    environment:
+      SERVICE_PRECONDITION: "namenode:50070 datanode:50075 hive-metastore-postgresql:5432"
+    ports:
+      - "29083:9083"
+    networks:
+      doris-net:
+        ipv4_address: 10.244.1.11
+
+  hive-metastore-postgresql:
+    image: bde2020/hive-metastore-postgresql:2.3.0
+    hostname: "postgresql"
+    networks:
+      doris-net:
+        ipv4_address: 10.244.1.12
+
+networks:
+  doris-net:
+    name: doris-net
+    ipam:
+      config:
+        - subnet: 10.244.1.0/24
+          gateway: 10.244.1.1
+volumes:
+  namenode:
+  datanode:
