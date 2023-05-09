@@ -32,3 +32,6 @@ create catalog hive properties (
 );
 ```
 6. 执行switch hive切换catalog后，即可查询hive中的表
+
+
+其中部署hive相关的配置文件来源：https://www.cnblogs.com/upupfeng/p/13452385.html#docker-hive
